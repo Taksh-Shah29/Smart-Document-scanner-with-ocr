@@ -22,13 +22,14 @@ class ScannerApp:
         self.original=self.processed=None; self.corners=None; self.drag=None
         self.pages=[]; self.refs={}; self.camera=None
         self.mode=tk.StringVar(value="Magic Color"); self.lang=tk.StringVar(value="eng")
-        self.psm=tk.StringVar(value="6"); self.status=tk.StringVar(value="Open an image or capture from webcam.")
+        self.psm=tk.StringVar(value="4"); self.status=tk.StringVar(value="Open an image or capture from webcam.")
         bar=ttk.Frame(root,padding=8); bar.pack(fill="x")
         for label,fn in [("Open Image",self.open_image),("Webcam Capture",self.webcam),
                          ("Auto Detect",self.auto_detect),("Apply Corners",self.apply_corners),
                          ("Enhance",self.enhance),("Extract OCR",self.ocr),
+                         ("Handwriting OCR",self.handwriting_ocr),
                          ("Add PDF Page",self.add_page),("Export Multi-page PDF",self.export_pdf),
-                         ("Save Image",self.save_image),("AI Classify",self.ai_classify)]:
+                         ("Save Image",self.save_image),("Detect Document Type",self.ai_classify)]:
             ttk.Button(bar,text=label,command=fn).pack(side="left",padx=2)
         opts=ttk.Frame(root,padding=(8,0,8,8)); opts.pack(fill="x")
         ttk.Label(opts,text="Image filter").pack(side="left")
@@ -49,7 +50,7 @@ class ScannerApp:
         tf=ttk.LabelFrame(lower,text="OCR text (editable)",padding=4); pf=ttk.LabelFrame(lower,text="PDF page queue",padding=4)
         lower.add(tf,weight=3); lower.add(pf,weight=1)
         self.text=tk.Text(tf,height=7,wrap="word"); self.text.pack(fill="both",expand=True)
-        self.ai_result=tk.StringVar(value="AI document type: Not classified")
+        self.ai_result=tk.StringVar(value="Document type: Not classified")
         ttk.Label(tf,textvariable=self.ai_result,foreground="#087f6b").pack(anchor="w",pady=(4,0))
         self.page_list=tk.Listbox(pf,height=6); self.page_list.pack(fill="both",expand=True)
         ttk.Button(pf,text="Remove selected",command=self.remove_page).pack(fill="x")
@@ -141,6 +142,24 @@ class ScannerApp:
             messagebox.showerror("Tesseract missing","Install Tesseract OCR separately; see README.")
         except Exception as ex:messagebox.showerror("OCR error",str(ex))
 
+    def handwriting_ocr(self):
+        if self.processed is None:
+            self.enhance()
+        if self.processed is None:
+            return
+        try:
+            from handwriting_ocr import extract_handwriting
+            self.status.set("Loading English handwriting OCR model; first use downloads it locally.")
+            self.root.update_idletasks()
+            text = extract_handwriting(self.processed)
+            self.text.delete("1.0", "end")
+            self.text.insert("1.0", text)
+            self.status.set("Handwriting OCR complete — review the result for mistakes.")
+            if text.strip():
+                self.ai_classify()
+        except Exception as ex:
+            messagebox.showerror("Handwriting OCR", str(ex))
+
     def ai_classify(self):
         """Classify the current OCR text locally; no cloud/API connection is required."""
         content = self.text.get("1.0", "end").strip()
@@ -149,14 +168,14 @@ class ScannerApp:
             return
         result = classify_document(content)
         self.ai_result.set(
-            f"AI document type: {result['label']}  |  Confidence: {result['confidence']}%  |  {result['reason']}"
+            f"Document type: {result['label']}  |  Confidence: {result['confidence']}%  |  {result['reason']}"
         )
         self.status.set(f"Document classified as {result['label']}. Review the suggestion before using it.")
         messagebox.showinfo(
-            "Scanify Pro — AI classification",
-            f"Predicted type: {result['label']}\\nConfidence: {result['confidence']}%\\n"
-            f"Suggested filename: {make_suggested_filename(result['label'])}\\n\\n"
-            f"Reason: {result['reason']}\\n\\n"
+            "Scanify Pro — Document type",
+            f"Predicted type: {result['label']}\nConfidence: {result['confidence']}%\n"
+            f"Suggested filename: {make_suggested_filename(result['label'])}\n\n"
+            f"Reason: {result['reason']}\n\n"
             "This is an offline, keyword-based AI-assisted prediction. Please verify the result."
         )
 

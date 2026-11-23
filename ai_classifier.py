@@ -9,6 +9,10 @@ import re
 from datetime import datetime
 
 CATEGORY_RULES = {
+    "Student ID Card": {
+        "strong": ["student id card", "student identity card", "university id card", "college id card", "campus card"],
+        "weak": ["blood group", "emergency contact", "student name", "university", "college", "btech", "school of", "enrollment no", "enrolment no", "department"],
+    },
     "Invoice": {
         "strong": ["invoice", "tax invoice", "invoice no", "invoice number", "bill to", "ship to", "subtotal", "grand total", "gstin", "hsn"],
         "weak": ["quantity", "unit price", "amount", "cgst", "sgst", "igst", "purchase order"],
@@ -56,6 +60,15 @@ def classify_document(text):
         score = len(strong_hits) * 3 + len(weak_hits)
         scores[category] = score
         matched[category] = strong_hits + weak_hits
+
+    # Student cards often omit the literal words "student ID card". Treat a
+    # school/university signal plus several identity-card fields as stronger
+    # evidence than any one field on its own.
+    card_signals = [term for term in ("blood group", "emergency contact", "id card", "student id", "id no", "roll no") if term in content]
+    education_signals = [term for term in ("university", "college", "school of", "department", "btech", "course", "student") if term in content]
+    if len(card_signals) >= 2 and education_signals:
+        scores["Student ID Card"] += 5
+        matched["Student ID Card"] = list(dict.fromkeys(matched["Student ID Card"] + card_signals[:2] + education_signals[:2]))
 
     best = max(scores, key=scores.get)
     ranked = sorted(scores.values(), reverse=True)

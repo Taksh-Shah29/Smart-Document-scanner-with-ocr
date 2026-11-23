@@ -23,15 +23,20 @@ If Tesseract is installed but not detected, add this after imports in app.py (ad
 ## Run tests
 `python -m unittest test_scanner.py`
 
+## Handwriting OCR (English)
+- Install the optional packages with `python -m pip install -r requirements-handwriting.txt`.
+- Click **Handwriting OCR** to recognize handwritten lines with the local TrOCR model. The first use downloads the model (about 247 MB); after that, recognition runs on this computer.
+- TrOCR is intended for line-level handwriting and may still make mistakes on cursive, blurry, or unusual handwriting.
+
 ## Demo
 Open a tilted document → adjust yellow corners → Enhance → Extract OCR → Add PDF Page → open another image and repeat → Export Multi-page PDF.
 
 ## OCR notes
 - `pytesseract` is a Python wrapper; the Tesseract desktop engine must be installed separately.
 - Default language is `eng`. Install additional trained language data (for example Hindi) before entering its code.
-- PSM 6 is a useful starting point for a block of text. Try 3, 4 or 11 for other layouts.
+- PSM 4 is the default for a single column with mixed text sizes. Try 6 for one uniform text block, 3 for a full page with multiple columns, or 11 for scattered text.
 - Confidence is an engine confidence score, not a measured accuracy percentage. For a formal evaluation, compare OCR output against manually transcribed ground truth and calculate character error rate / word error rate.
-- Designed for printed text; handwriting recognition is not included.
+- Standard OCR is designed for printed text. Use **Handwriting OCR** for English handwriting and review the result, especially for cursive or unclear writing.
 
 ## Limitations
 - Webcam uses camera index 0.
@@ -42,7 +47,7 @@ Open a tilted document → adjust yellow corners → Enhance → Extract OCR →
 ## AI-assisted document classification
 - Click **Extract OCR**. Scanify Pro then automatically predicts a document category.
 - You can also click **AI Classify** after editing or pasting text into the OCR editor.
-- Supported categories: Invoice, Receipt, Bank Statement, Identity Document, Academic Document, Letter, Form, and General Document.
+- Supported categories: Student ID Card, Invoice, Receipt, Bank Statement, Identity Document, Academic Document, Letter, Form, and General Document.
 - The classifier runs locally using weighted text patterns; it needs no internet connection, API key, or model download.
 - Its confidence is a heuristic indicator, not a calibrated probability. OCR mistakes can affect classification, so verify the suggested category before filing or relying on it.
 - The popup also provides a suggested filename. Rename the exported file yourself; the app does not silently rename or upload documents.

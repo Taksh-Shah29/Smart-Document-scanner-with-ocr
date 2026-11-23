@@ -11,17 +11,61 @@ def order_points(p):
     return r
 
 def detect_document(image):
-    h,w=image.shape[:2]; scale=min(1.0,1000/max(h,w))
-    small=cv2.resize(image,(int(w*scale),int(h*scale))) if scale<1 else image.copy()
-    gray=cv2.cvtColor(small,cv2.COLOR_BGR2GRAY)
-    edges=cv2.Canny(cv2.GaussianBlur(gray,(5,5),0),40,130)
-    edges=cv2.dilate(edges,np.ones((3,3),np.uint8),iterations=1)
-    contours,_=cv2.findContours(edges,cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
-    for c in sorted(contours,key=cv2.contourArea,reverse=True)[:40]:
-        peri=cv2.arcLength(c,True); approx=cv2.approxPolyDP(c,.02*peri,True)
-        if len(approx)==4 and cv2.contourArea(approx)>.10*small.shape[0]*small.shape[1]:
-            return order_points(approx.reshape(4,2).astype(np.float32)/scale)
-    return None
+    h, w = image.shape[:2]
+    scale = min(1.0, 1400 / max(h, w))
+    small = cv2.resize(image, (int(w * scale), int(h * scale))) if scale < 1 else image.copy()
+    gray_raw = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+    gray = cv2.bilateralFilter(gray_raw, 7, 45, 45)
+
+    # A single Canny pass misses page edges when the paper and background have
+    # similar colors or uneven lighting. Try multiple edge/threshold masks.
+    edges = cv2.Canny(gray, 25, 100)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+    # Keep this very low-threshold pass on the unfiltered image: smoothing can
+    # erase the faint edge between a pale card and a similarly light surface.
+    low_edges = cv2.Canny(gray_raw, 5, 25)
+    wide_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (7, 7))
+    masks = [
+        cv2.morphologyEx(low_edges, cv2.MORPH_CLOSE, wide_kernel, iterations=3),
+        cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel, iterations=2),
+        cv2.morphologyEx(cv2.Canny(gray, 50, 160), cv2.MORPH_CLOSE, kernel, iterations=2),
+    ]
+    _, otsu = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    masks.extend([
+        cv2.morphologyEx(otsu, cv2.MORPH_CLOSE, kernel, iterations=2),
+        cv2.morphologyEx(255 - otsu, cv2.MORPH_CLOSE, kernel, iterations=2),
+    ])
+    for block_size in (31, 61):
+        adaptive = cv2.adaptiveThreshold(
+            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY,
+            block_size, 7
+        )
+        masks.append(cv2.morphologyEx(adaptive, cv2.MORPH_CLOSE, kernel, iterations=2))
+        masks.append(cv2.morphologyEx(255 - adaptive, cv2.MORPH_CLOSE, kernel, iterations=2))
+
+    min_area = 0.08 * small.shape[0] * small.shape[1]
+    best = None
+    best_area = 0
+    for mask in masks:
+        contours, _ = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        for contour in sorted(contours, key=cv2.contourArea, reverse=True)[:60]:
+            area = cv2.contourArea(contour)
+            if area < min_area or area <= best_area:
+                continue
+            x, y, cw, ch = cv2.boundingRect(contour)
+            if x <= 1 and y <= 1 and x + cw >= small.shape[1] - 1 and y + ch >= small.shape[0] - 1:
+                continue
+            perimeter = cv2.arcLength(contour, True)
+            for epsilon in (0.015, 0.02, 0.03, 0.04):
+                approx = cv2.approxPolyDP(contour, epsilon * perimeter, True)
+                if len(approx) == 4 and cv2.isContourConvex(approx):
+                    best = approx.reshape(4, 2).astype(np.float32)
+                    best_area = area
+                    break
+
+    if best is None:
+        return None
+    return order_points(best / scale)
 
 def perspective_transform(image,points):
     tl,tr,br,bl=order_points(points)
@@ -135,17 +179,18 @@ def _ocr_pass(image, lang, psm, threshold_mode):
         lines.setdefault(key, []).append(word)
         scores.append(confidence)
 
-    output = "\\n".join(" ".join(words) for words in lines.values())
+    output = "\n".join(" ".join(words) for words in lines.values())
     mean_confidence = round(float(np.mean(scores)), 1) if scores else 0.0
     return output.strip(), mean_confidence
 
 
 def extract_text_and_confidence(image, lang="eng", psm=6):
-    """Try adaptive and Otsu preprocessing; return the stronger-confidence result."""
+    """Try adaptive, Otsu, and grayscale OCR inputs; return the top confidence result."""
     prepared = prepare_for_ocr(image)
     candidates = [
         _ocr_pass(prepared, lang, psm, "adaptive"),
         _ocr_pass(prepared, lang, psm, "otsu"),
+        _ocr_pass(prepared, lang, psm, "none"),
     ]
     # Confidence is a useful selection signal, not a guarantee of text accuracy.
     return max(candidates, key=lambda result: result[1])
