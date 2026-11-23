@@ -46,7 +46,7 @@ Open a tilted document → adjust yellow corners → Enhance → Extract OCR →
 
 ## AI-assisted document classification
 - Click **Extract OCR**. Scanify Pro then automatically predicts a document category.
-- You can also click **AI Classify** after editing or pasting text into the OCR editor.
+- You can also click **Detect Document Type** after editing or pasting text into the OCR editor.
 - Supported categories: Student ID Card, Invoice, Receipt, Bank Statement, Identity Document, Academic Document, Letter, Form, and General Document.
 - The classifier runs locally using weighted text patterns; it needs no internet connection, API key, or model download.
 - Its confidence is a heuristic indicator, not a calibrated probability. OCR mistakes can affect classification, so verify the suggested category before filing or relying on it.
