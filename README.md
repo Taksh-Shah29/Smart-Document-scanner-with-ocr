@@ -51,3 +51,4 @@ Open a tilted document → adjust yellow corners → Enhance → Extract OCR →
 - The classifier runs locally using weighted text patterns; it needs no internet connection, API key, or model download.
 - Its confidence is a heuristic indicator, not a calibrated probability. OCR mistakes can affect classification, so verify the suggested category before filing or relying on it.
 - The popup also provides a suggested filename. Rename the exported file yourself; the app does not silently rename or upload documents.
+So That's our final changes for this project
